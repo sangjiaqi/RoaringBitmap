@@ -1,4 +1,4 @@
-package org.roaringbitmap.shortlong;
+package org.roaringbitmap.bytelong;
 
 import org.roaringbitmap.BitmapDataProvider;
 import org.roaringbitmap.BitmapDataProviderSupplier;
@@ -25,10 +25,10 @@ import java.util.Objects;
 import java.util.SortedMap;
 import java.util.TreeMap;
 
-public class Roaring48NavigableMap implements Externalizable, LongBitmapDataProvider {
+public class Roaring40NavigableMap implements Externalizable, LongBitmapDataProvider {
 
     // 定义 ShortInteger 类型的储存结构
-    private NavigableMap<Short, BitmapDataProvider> highToBitmap;
+    private NavigableMap<Byte, BitmapDataProvider> highToBitmap;
 
     // 是否为符号 Long 类型
     private boolean signedLongs = false;
@@ -40,7 +40,7 @@ public class Roaring48NavigableMap implements Externalizable, LongBitmapDataProv
     private transient boolean doCacheCardinalities = true;
 
     // 取出高位（当连续请求排名时，防止重新计算所有的基数）
-    private transient short firstHighNotValid = (short) (highestHigh() + 1);
+    private transient byte firstHighNotValid = (byte) (highestHigh() + 1);
 
     // 标识积累的基数是否全部有效
     private transient boolean allValid = false;
@@ -49,10 +49,10 @@ public class Roaring48NavigableMap implements Externalizable, LongBitmapDataProv
     private transient long[] sortedCumlatedCardinality = new long[0];
 
     // 对高位进行排序
-    private transient short[] sortedHighs = new short[0];
+    private transient byte[] sortedHighs = new byte[0];
 
     // 最新的储存值
-    private transient Map.Entry<Short, BitmapDataProvider> latestAddedHigh = null;
+    private transient Map.Entry<Byte, BitmapDataProvider> latestAddedHigh = null;
 
     // 定义排序是否有符号
     private static final boolean DEFAULT_ORDER_IS_SIGNED = false;
@@ -60,23 +60,23 @@ public class Roaring48NavigableMap implements Externalizable, LongBitmapDataProv
     // 定义基数是否缓存
     private static final boolean DEFAULT_CARDINALITIES_ARE_CACHED = true;
 
-    public Roaring48NavigableMap() { this(DEFAULT_ORDER_IS_SIGNED); }
+    public Roaring40NavigableMap() { this(DEFAULT_ORDER_IS_SIGNED); }
 
-    public Roaring48NavigableMap(boolean signedLongs) { this(signedLongs, DEFAULT_CARDINALITIES_ARE_CACHED); }
+    public Roaring40NavigableMap(boolean signedLongs) { this(signedLongs, DEFAULT_CARDINALITIES_ARE_CACHED); }
 
-    public Roaring48NavigableMap(boolean signedLongs, boolean cacheCardinalities) {
+    public Roaring40NavigableMap(boolean signedLongs, boolean cacheCardinalities) {
         this(signedLongs, cacheCardinalities, new RoaringBitmapSupplier());
     }
 
-    public Roaring48NavigableMap(BitmapDataProviderSupplier supplier) {
+    public Roaring40NavigableMap(BitmapDataProviderSupplier supplier) {
         this(DEFAULT_ORDER_IS_SIGNED, DEFAULT_CARDINALITIES_ARE_CACHED, supplier);
     }
 
-    public Roaring48NavigableMap(boolean signedLongs, BitmapDataProviderSupplier supplier) {
+    public Roaring40NavigableMap(boolean signedLongs, BitmapDataProviderSupplier supplier) {
         this(signedLongs, DEFAULT_CARDINALITIES_ARE_CACHED, supplier);
     }
 
-    public Roaring48NavigableMap(boolean signedLongs, boolean cacheCardinalities,
+    public Roaring40NavigableMap(boolean signedLongs, boolean cacheCardinalities,
                                  BitmapDataProviderSupplier supplier) {
         this.signedLongs = signedLongs;
         this.supplier = supplier;
@@ -95,11 +95,11 @@ public class Roaring48NavigableMap implements Externalizable, LongBitmapDataProv
      * 初始化结构
      */
     private void resetPerfHelpers() {
-        firstHighNotValid = (short) (RoaringIntPacking.highestHigh(signedLongs) + 1);
+        firstHighNotValid = (byte) (highestHigh() + 1);
         allValid = false;
 
         sortedCumlatedCardinality = new long[0];
-        sortedHighs = new short[0];
+        sortedHighs = new byte[0];
 
         latestAddedHigh = null;
     }
@@ -108,7 +108,7 @@ public class Roaring48NavigableMap implements Externalizable, LongBitmapDataProv
      * 取出 NavigableMap 对象
      * @return NavigableMap 对象
      */
-    NavigableMap<Short, BitmapDataProvider> getHighToBitmap() { return highToBitmap; }
+    NavigableMap<Byte, BitmapDataProvider> getHighToBitmap() { return highToBitmap; }
 
     /**
      * 取出高位
@@ -172,11 +172,11 @@ public class Roaring48NavigableMap implements Externalizable, LongBitmapDataProv
      * 按位进行 OR 操作（并集）。当前位图会被修改
      * @param x2
      */
-    public void or(final Roaring48NavigableMap x2) {
+    public void or(final Roaring40NavigableMap x2) {
         boolean firstBucket = true;
 
-        for (Map.Entry<Short, BitmapDataProvider> e2 : x2.highToBitmap.entrySet()) {
-            Short high = e2.getKey();
+        for (Map.Entry<Byte, BitmapDataProvider> e2 : x2.highToBitmap.entrySet()) {
+            Byte high = e2.getKey();
 
             BitmapDataProvider lowBitmap1 = this.highToBitmap.get(high);
 
@@ -206,7 +206,7 @@ public class Roaring48NavigableMap implements Externalizable, LongBitmapDataProv
             if (firstBucket) {
                 firstBucket = false;
 
-                firstHighNotValid = (short) Math.min(firstHighNotValid, high);
+                firstHighNotValid = (byte) Math.min(firstHighNotValid, high);
                 allValid = false;
             }
         }
@@ -216,11 +216,11 @@ public class Roaring48NavigableMap implements Externalizable, LongBitmapDataProv
      * 按位进行 XOR 操作（对称差集）。当前位图会被修改
      * @param x2
      */
-    public void xor(final Roaring48NavigableMap x2) {
+    public void xor(final Roaring40NavigableMap x2) {
         boolean firstBucket = true;
 
-        for (Map.Entry<Short, BitmapDataProvider> e2 : x2.highToBitmap.entrySet()) {
-            Short high = e2.getKey();
+        for (Map.Entry<Byte, BitmapDataProvider> e2 : x2.highToBitmap.entrySet()) {
+            byte high = e2.getKey();
 
             BitmapDataProvider lowBitmap1 = this.highToBitmap.get(high);
 
@@ -250,7 +250,7 @@ public class Roaring48NavigableMap implements Externalizable, LongBitmapDataProv
             if (firstBucket) {
                 firstBucket = false;
 
-                firstHighNotValid = (short) Math.min(firstHighNotValid, high);
+                firstHighNotValid = (byte) Math.min(firstHighNotValid, high);
                 allValid = false;
             }
         }
@@ -260,14 +260,14 @@ public class Roaring48NavigableMap implements Externalizable, LongBitmapDataProv
      * 按位进行 AND 操作（交集）。当前位图被修改
      * @param x2
      */
-    public void and(final Roaring48NavigableMap x2) {
+    public void and(final Roaring40NavigableMap x2) {
         boolean firstBucket = true;
 
-        Iterator<Map.Entry<Short, BitmapDataProvider>> thisIterator = highToBitmap.entrySet().iterator();
+        Iterator<Map.Entry<Byte, BitmapDataProvider>> thisIterator = highToBitmap.entrySet().iterator();
         while (thisIterator.hasNext()) {
-            Map.Entry<Short, BitmapDataProvider> e1 = thisIterator.next();
+            Map.Entry<Byte, BitmapDataProvider> e1 = thisIterator.next();
 
-            Short high = e1.getKey();
+            byte high = e1.getKey();
             BitmapDataProvider lowBitmap2 = x2.highToBitmap.get(high);
 
             if (lowBitmap2 == null) {
@@ -288,7 +288,7 @@ public class Roaring48NavigableMap implements Externalizable, LongBitmapDataProv
             if (firstBucket) {
                 firstBucket = false;
 
-                firstHighNotValid = (short) Math.min(firstHighNotValid, high);
+                firstHighNotValid = (byte) Math.min(firstHighNotValid, high);
                 allValid = false;
             }
         }
@@ -299,14 +299,14 @@ public class Roaring48NavigableMap implements Externalizable, LongBitmapDataProv
      * 按位进行 ANDNOT 操作（差集）。当前位图被修改
      * @param x2
      */
-    public void andNot(final Roaring48NavigableMap x2) {
+    public void andNot(final Roaring40NavigableMap x2) {
         boolean firstBucket = true;
 
-        Iterator<Map.Entry<Short, BitmapDataProvider>> thisIterator = highToBitmap.entrySet().iterator();
+        Iterator<Map.Entry<Byte, BitmapDataProvider>> thisIterator = highToBitmap.entrySet().iterator();
         while (thisIterator.hasNext()) {
-            Map.Entry<Short, BitmapDataProvider> e1 = thisIterator.next();
+            Map.Entry<Byte, BitmapDataProvider> e1 = thisIterator.next();
 
-            Short high = e1.getKey();
+            byte high = e1.getKey();
             BitmapDataProvider lowBitmap2 = x2.highToBitmap.get(high);
 
             if (lowBitmap2 != null) {
@@ -325,7 +325,7 @@ public class Roaring48NavigableMap implements Externalizable, LongBitmapDataProv
             if (firstBucket) {
                 firstBucket = false;
 
-                firstHighNotValid = (short) Math.min(firstHighNotValid, high);
+                firstHighNotValid = (byte) Math.min(firstHighNotValid, high);
                 allValid = false;
             }
         }
@@ -400,7 +400,7 @@ public class Roaring48NavigableMap implements Externalizable, LongBitmapDataProv
         }
 
         for (int i = 0; i < nbHighs; i++) {
-            short high = in.readShort();
+            byte high = in.readByte();
             RoaringBitmap provider = new RoaringBitmap();
             provider.deserialize(in);
 
@@ -423,8 +423,8 @@ public class Roaring48NavigableMap implements Externalizable, LongBitmapDataProv
      * @param dat
      * @return
      */
-    public static Roaring48NavigableMap bitmapOf(final long... dat) {
-        final Roaring48NavigableMap ans = new Roaring48NavigableMap();
+    public static Roaring40NavigableMap bitmapOf(final long... dat) {
+        final Roaring40NavigableMap ans = new Roaring40NavigableMap();
         ans.add(dat);
         return ans;
     }
@@ -445,15 +445,15 @@ public class Roaring48NavigableMap implements Externalizable, LongBitmapDataProv
      * @param rangeEnd
      */
     public void add(final long rangeStart, final long rangeEnd) {
-        short startHigh = high(rangeStart);
+        byte startHigh = high(rangeStart);
         int startLow = low(rangeStart);
 
-        short endHigh = high(rangeEnd);
+        byte endHigh = high(rangeEnd);
         int endLow = low(rangeEnd);
 
         for (int high = startHigh; high <= endHigh; high++) {
             final int currentStartLow;
-            if (startHigh == (short) high) {
+            if (startHigh == (byte) high) {
                 currentStartLow = startLow;
             } else {
                 currentStartLow = 0;
@@ -462,17 +462,17 @@ public class Roaring48NavigableMap implements Externalizable, LongBitmapDataProv
             long startLowAsLong = Util.toUnsignedLong(currentStartLow);
 
             final long endLowAsLong;
-            if (endHigh == (short) high) {
+            if (endHigh == (byte) high) {
                 endLowAsLong = Util.toUnsignedLong(endLow);
             } else {
                 endLowAsLong = Util.toUnsignedLong(-1) + 1;
             }
 
             if (endLowAsLong > startLowAsLong) {
-                BitmapDataProvider bitmap = highToBitmap.get((short) high);
+                BitmapDataProvider bitmap = highToBitmap.get((byte) high);
                 if (bitmap == null) {
                     bitmap = new MutableRoaringBitmap();
-                    pushBitmapForHigh((short) high, bitmap);
+                    pushBitmapForHigh((byte) high, bitmap);
                 }
 
                 if (bitmap instanceof RoaringBitmap) {
@@ -493,7 +493,7 @@ public class Roaring48NavigableMap implements Externalizable, LongBitmapDataProv
      * @param x
      */
     public void flip (final long x) {
-        short high = RoaringIntPacking.high(x);
+        byte high = RoaringIntPacking.high(x);
         BitmapDataProvider lowBitmap = highToBitmap.get(high);
         if (lowBitmap == null) {
             addLong(x);
@@ -528,15 +528,15 @@ public class Roaring48NavigableMap implements Externalizable, LongBitmapDataProv
 
         long num = 1L;
 
-        if (x > (num << 48)) throw new IllegalArgumentException("The param is large than 48 bit");
+        if (x > (num << 40)) throw new IllegalArgumentException("The param is large than 40 bit");
 
-        short high = high(x);
+        byte high = high(x);
         int low = low(x);
 
-        Map.Entry<Short, BitmapDataProvider> local = latestAddedHigh;
+        Map.Entry<Byte, BitmapDataProvider> local = latestAddedHigh;
 
         BitmapDataProvider bitmap;
-        if (local != null && local.getKey().shortValue() == high) {
+        if (local != null && local.getKey().byteValue() == high) {
             bitmap = local.getValue();
         } else {
             bitmap = highToBitmap.get(high);
@@ -553,7 +553,7 @@ public class Roaring48NavigableMap implements Externalizable, LongBitmapDataProv
 
     @Override
     public void removeLong(long x) {
-        short high = high(x);
+        byte high = high(x);
 
         BitmapDataProvider bitmap = highToBitmap.get(high);
 
@@ -574,7 +574,7 @@ public class Roaring48NavigableMap implements Externalizable, LongBitmapDataProv
 
     @Override
     public boolean contains(long x) {
-        short high = RoaringIntPacking.high(x);
+        byte high = RoaringIntPacking.high(x);
         BitmapDataProvider lowBitmap = highToBitmap.get(high);
         if (lowBitmap == null) {
             return false;
@@ -608,7 +608,7 @@ public class Roaring48NavigableMap implements Externalizable, LongBitmapDataProv
 
     @Override
     public void forEach(LongConsumer lc) {
-        for (final Map.Entry<Short, BitmapDataProvider> highEntry : highToBitmap.entrySet()) {
+        for (final Map.Entry<Byte, BitmapDataProvider> highEntry : highToBitmap.entrySet()) {
             highEntry.getValue().forEach(new IntConsumer() {
                 @Override
                 public void accept(int low) {
@@ -620,7 +620,7 @@ public class Roaring48NavigableMap implements Externalizable, LongBitmapDataProv
 
     @Override
     public LongIterator getLongIterator() {
-        final Iterator<Map.Entry<Short, BitmapDataProvider>> it = highToBitmap.entrySet().iterator();
+        final Iterator<Map.Entry<Byte, BitmapDataProvider>> it = highToBitmap.entrySet().iterator();
 
         return toIterator(it, false);
     }
@@ -663,7 +663,7 @@ public class Roaring48NavigableMap implements Externalizable, LongBitmapDataProv
 
     @Override
     public long rankLong(long id) {
-        short high = RoaringIntPacking.high(id);
+        byte high = RoaringIntPacking.high(id);
         int low = RoaringIntPacking.low(id);
 
         if (!doCacheCardinalities) return rankLongNoCache(high, low);
@@ -707,7 +707,7 @@ public class Roaring48NavigableMap implements Externalizable, LongBitmapDataProv
                 return throwSelectInvalidIndex(j);
             }
 
-            short high = sortedHighs[position + 1];
+            byte high = sortedHighs[position + 1];
             BitmapDataProvider nextBitmap = highToBitmap.get(high);
             return RoaringIntPacking.pack(high, nextBitmap.select(0));
         } else {
@@ -724,7 +724,7 @@ public class Roaring48NavigableMap implements Externalizable, LongBitmapDataProv
 
             final int givenBitmapSelect = (int) (j - previousBucketCardinality);
 
-            short high = sortedHighs[insertionPoint];
+            byte high = sortedHighs[insertionPoint];
             BitmapDataProvider lowBitmap = highToBitmap.get(high);
             int low = lowBitmap.select(givenBitmapSelect);
 
@@ -739,8 +739,8 @@ public class Roaring48NavigableMap implements Externalizable, LongBitmapDataProv
 
         out.writeInt(highToBitmap.size());
 
-        for (Map.Entry<Short, BitmapDataProvider> entry : highToBitmap.entrySet()) {
-            out.writeShort(entry.getKey().shortValue());
+        for (Map.Entry<Byte, BitmapDataProvider> entry : highToBitmap.entrySet()) {
+            out.writeByte(entry.getKey().byteValue());
             entry.getValue().serialize(out);
         }
     }
@@ -752,7 +752,7 @@ public class Roaring48NavigableMap implements Externalizable, LongBitmapDataProv
         nbBytes += 1;
         nbBytes += 4;
 
-        for (Map.Entry<Short, BitmapDataProvider> entry : highToBitmap.entrySet()) {
+        for (Map.Entry<Byte, BitmapDataProvider> entry : highToBitmap.entrySet()) {
             nbBytes += 4;
             nbBytes += entry.getValue().serializedSizeInBytes();
         }
@@ -770,7 +770,7 @@ public class Roaring48NavigableMap implements Externalizable, LongBitmapDataProv
         final long[] array = new long[(int) cardinality];
 
         int pos = 0;
-        org.roaringbitmap.shortlong.LongIterator it = getLongIterator();
+        LongIterator it = getLongIterator();
 
         while (it.hasNext()) {
             array[pos++] = it.next();
@@ -794,7 +794,7 @@ public class Roaring48NavigableMap implements Externalizable, LongBitmapDataProv
         if (getClass() != obj.getClass()) {
             return false;
         }
-        Roaring48NavigableMap other = (Roaring48NavigableMap) obj;
+        Roaring40NavigableMap other = (Roaring40NavigableMap) obj;
         return Objects.equals(highToBitmap, other.highToBitmap);
     }
 
@@ -804,9 +804,9 @@ public class Roaring48NavigableMap implements Externalizable, LongBitmapDataProv
      * @param reversed
      * @return
      */
-    protected LongIterator toIterator(final Iterator<Map.Entry<Short, BitmapDataProvider>> it, final boolean reversed) {
+    protected LongIterator toIterator(final Iterator<Map.Entry<Byte, BitmapDataProvider>> it, final boolean reversed) {
         return new LongIterator() {
-            protected short currentKey;
+            protected byte currentKey;
             protected IntIterator currentIt;
 
             @Override
@@ -833,9 +833,9 @@ public class Roaring48NavigableMap implements Externalizable, LongBitmapDataProv
                 }
             }
 
-            private boolean moveToNextEntry(Iterator<Map.Entry<Short, BitmapDataProvider>> it) {
+            private boolean moveToNextEntry(Iterator<Map.Entry<Byte, BitmapDataProvider>> it) {
                 if (it.hasNext()) {
-                    Map.Entry<Short, BitmapDataProvider> next = it.next();
+                    Map.Entry<Byte, BitmapDataProvider> next = it.next();
                     currentKey = next.getKey();
                     if (reversed) {
                         currentIt = next.getValue().getReverseIntIterator();
@@ -865,7 +865,7 @@ public class Roaring48NavigableMap implements Externalizable, LongBitmapDataProv
      * @param high
      * @return
      */
-    protected int ensureCumulatives(short high) {
+    protected int ensureCumulatives(byte high) {
         if (allValid) {
             return highToBitmap.size();
         } else if (compare(high, firstHighNotValid) < 0) {
@@ -878,20 +878,20 @@ public class Roaring48NavigableMap implements Externalizable, LongBitmapDataProv
                 return insertionPosition;
             }
         } else {
-            SortedMap<Short, BitmapDataProvider> tailMap =
+            SortedMap<Byte, BitmapDataProvider> tailMap =
                 highToBitmap.tailMap(firstHighNotValid, true);
 
             int indexOk = highToBitmap.size() - tailMap.size();
 
-            Iterator<Map.Entry<Short, BitmapDataProvider>> it = tailMap.entrySet().iterator();
+            Iterator<Map.Entry<Byte, BitmapDataProvider>> it = tailMap.entrySet().iterator();
             while (it.hasNext()) {
-                Map.Entry<Short, BitmapDataProvider> e = it.next();
-                short currentHigh = e.getKey();
+                Map.Entry<Byte, BitmapDataProvider> e = it.next();
+                byte currentHigh = e.getKey();
 
                 if (compare(currentHigh, high) > 0) {
                     break;
                 } else if (e.getValue().isEmpty()) {
-                    if (latestAddedHigh != null && latestAddedHigh.getKey().shortValue() == currentHigh) {
+                    if (latestAddedHigh != null && latestAddedHigh.getKey().byteValue() == currentHigh) {
                         latestAddedHigh = null;
                     }
                     it.remove();
@@ -912,7 +912,7 @@ public class Roaring48NavigableMap implements Externalizable, LongBitmapDataProv
      * 返回 short 类型的高位最大值
      * @return
      */
-    private short highestHigh() {
+    private byte highestHigh() {
         return RoaringIntPacking.highestHigh(signedLongs);
     }
 
@@ -921,7 +921,7 @@ public class Roaring48NavigableMap implements Externalizable, LongBitmapDataProv
      * @param id
      * @return 16 位 short 值
      */
-    private short high(long id) {
+    private byte high(long id) {
         return RoaringIntPacking.high(id);
     }
 
@@ -947,12 +947,12 @@ public class Roaring48NavigableMap implements Externalizable, LongBitmapDataProv
      * @param high
      * @param bitmap
      */
-    private void pushBitmapForHigh(short high, BitmapDataProvider bitmap) {
+    private void pushBitmapForHigh(byte high, BitmapDataProvider bitmap) {
         BitmapDataProvider previous = highToBitmap.put(high, bitmap);
         assert previous == null : "should push only not-existing high";
     }
 
-    private void invalidateAboveHigh(short high) {
+    private void invalidateAboveHigh(byte high) {
         if (compare(firstHighNotValid, high) > 0) {
             firstHighNotValid = high;
             int indexNotValid = binarySearch(sortedHighs, firstHighNotValid);
@@ -970,14 +970,14 @@ public class Roaring48NavigableMap implements Externalizable, LongBitmapDataProv
     }
 
     /**
-     * 有无符号的 short 类型大小比较
+     * 有无符号的 byte 类型大小比较
      * @param x
      * @param y
      * @return
      */
-    private int compare(short x, short y) {
+    private int compare(byte x, byte y) {
         if (signedLongs) {
-            return Short.compare(x, y);
+            return Byte.compare(x, y);
         } else {
             return RoaringIntPacking.compareUnsigned(x, y);
         }
@@ -989,7 +989,7 @@ public class Roaring48NavigableMap implements Externalizable, LongBitmapDataProv
      * @param key
      * @return
      */
-    private int binarySearch(short[] array, short key) {
+    private int binarySearch(byte[] array, byte key) {
         if (signedLongs) {
             return Arrays.binarySearch(array, key);
         } else {
@@ -1006,7 +1006,7 @@ public class Roaring48NavigableMap implements Externalizable, LongBitmapDataProv
      * @param key
      * @return
      */
-    private int binarySearch(short[] array, int from, int to, short key) {
+    private int binarySearch(byte[] array, int from, int to, byte key) {
         if (signedLongs) {
             return Arrays.binarySearch(array, from , to, key);
         } else {
@@ -1023,14 +1023,14 @@ public class Roaring48NavigableMap implements Externalizable, LongBitmapDataProv
      * @param c
      * @return
      */
-    private static int unsignedBinarySearch(short[] a, int fromIndex, int toIndex, short key,
-                                            Comparator<? super Short> c) {
+    private static int unsignedBinarySearch(byte[] a, int fromIndex, int toIndex, byte key,
+                                            Comparator<? super Byte> c) {
         int low = fromIndex;
         int high = toIndex - 1;
 
         while (low <= high) {
             int mid = (low + high) >>> 1;
-            short midVal = a[mid];
+            byte midVal = a[mid];
             int cmp = c.compare(midVal, key);
             if (cmp < 0) {
                 low = mid + 1;
@@ -1062,7 +1062,7 @@ public class Roaring48NavigableMap implements Externalizable, LongBitmapDataProv
     private long selectNoCache(long j) {
         long left = j;
 
-        for (Map.Entry<Short, BitmapDataProvider> entry : highToBitmap.entrySet()) {
+        for (Map.Entry<Byte, BitmapDataProvider> entry : highToBitmap.entrySet()) {
             long lowCardinality = entry.getValue().getCardinality();
 
             if (left >= lowCardinality) {
@@ -1082,14 +1082,14 @@ public class Roaring48NavigableMap implements Externalizable, LongBitmapDataProv
      * @param low
      * @return
      */
-    private long rankLongNoCache(short high, int low) {
+    private long rankLongNoCache(byte high, int low) {
         long result = 0L;
 
         BitmapDataProvider lastBitmap = highToBitmap.get(high);
         if (lastBitmap == null) {
             if (lastBitmap == null) {
-                for (Map.Entry<Short, BitmapDataProvider> bitmap : highToBitmap.entrySet()) {
-                    if (bitmap.getKey().shortValue() > high) break;
+                for (Map.Entry<Byte, BitmapDataProvider> bitmap : highToBitmap.entrySet()) {
+                    if (bitmap.getKey().byteValue() > high) break;
                     else result += bitmap.getValue().getLongCardinality();
                 }
             }
@@ -1113,7 +1113,7 @@ public class Roaring48NavigableMap implements Externalizable, LongBitmapDataProv
      * @param currentHigh
      * @param indexOk
      */
-    private void ensureOne(Map.Entry<Short, BitmapDataProvider> e, short currentHigh, int indexOk) {
+    private void ensureOne(Map.Entry<Byte, BitmapDataProvider> e, byte currentHigh, int indexOk) {
         assert indexOk <= sortedHighs.length : indexOk + " is bigger than " + sortedHighs.length;
 
         final int index;
@@ -1160,7 +1160,7 @@ public class Roaring48NavigableMap implements Externalizable, LongBitmapDataProv
                     previousCardinality + e.getValue().getLongCardinality();
 
             if (currentHigh == highestHigh()) firstHighNotValid = currentHigh;
-            else firstHighNotValid = (short) (currentHigh + 1);
+            else firstHighNotValid = (byte) (currentHigh + 1);
         }
     }
 

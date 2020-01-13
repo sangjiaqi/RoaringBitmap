@@ -6,7 +6,7 @@ import org.omg.PortableInterceptor.SYSTEM_EXCEPTION;
 
 import java.util.Random;
 
-public class TestRoaring48NavigableMap {
+public class TestRoaring40NavigableMap {
 
     Roaring48NavigableMap left;
     Roaring48NavigableMap right;
