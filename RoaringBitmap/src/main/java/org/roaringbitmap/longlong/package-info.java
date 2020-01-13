@@ -5,6 +5,7 @@
 
 
 /**
+ * Long 类型拓展包
  * The org.roaringbitmap.longlong package  provides
  * one class ({@link org.roaringbitmap.longlong.Roaring64NavigableMap}) that   users
  * can rely upon for fast set of 64-bit integers.

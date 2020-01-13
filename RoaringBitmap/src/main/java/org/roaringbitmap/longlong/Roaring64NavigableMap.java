@@ -27,41 +27,52 @@ import java.util.Map.Entry;
 // bug-proof
 public class Roaring64NavigableMap implements Externalizable, LongBitmapDataProvider {
 
+  // 定义 Long 类型的储存结构
   // Not final to enable initialization in Externalizable.readObject
   private NavigableMap<Integer, BitmapDataProvider> highToBitmap;
 
+  // 是否为符号 Long 类型
   // If true, we handle longs a plain java longs: -1 if right before 0
   // If false, we handle longs as unsigned longs: 0 has no predecessor and Long.MAX_VALUE + 1L is
-  // expressed as a
-  // negative long
+  // expressed as a negative long
   private boolean signedLongs = false;
 
+  // 声明 bitmap 的供应
   private BitmapDataProviderSupplier supplier;
 
+  // 默认情况下，缓存基数
   // By default, we cache cardinalities
   private transient boolean doCacheCardinalities = true;
 
+  // 取出高位（当连续请求排名时，防止重新计算所有的基数）
   // Prevent recomputing all cardinalities when requesting consecutive ranks
   private transient int firstHighNotValid = highestHigh() + 1;
 
+  // 标识积累的基数是否全部有效
   // This boolean needs firstHighNotValid == Integer.MAX_VALUE to be allowed to be true
   // If false, it means nearly all cumulated cardinalities are valid, except high=Integer.MAX_VALUE
   // If true, it means all cumulated cardinalities are valid, even high=Integer.MAX_VALUE
   private transient boolean allValid = false;
 
   // TODO: I would prefer not managing arrays myself
+  // 对积累的基数进行排序
   private transient long[] sortedCumulatedCardinality = new long[0];
+  // 对高位进行排序
   private transient int[] sortedHighs = new int[0];
 
+  // 最新的 long 类型储存值
   // We guess consecutive .addLong will be on proximate longs: we remember the bitmap attached to
-  // this bucket in order
-  // to skip the indirection
+  // this bucket in order to skip the indirection
   private transient Map.Entry<Integer, BitmapDataProvider> latestAddedHigh = null;
 
+  // 定义排序是否有符号
   private static final boolean DEFAULT_ORDER_IS_SIGNED = false;
+
+  // 定义基数是否缓存
   private static final boolean DEFAULT_CARDINALITIES_ARE_CACHED = true;
 
   /**
+   * 空参构造
    * By default, we consider longs are unsigned longs: normal longs: 0 is the lowest possible long.
    * Long.MAX_VALUE is followed by Long.MIN_VALUE. -1L is the highest possible value
    */
@@ -70,7 +81,7 @@ public class Roaring64NavigableMap implements Externalizable, LongBitmapDataProv
   }
 
   /**
-   * 
+   * 有参构造（有无符号位）
    * By default, use RoaringBitmap as underlyings {@link BitmapDataProvider}
    * 
    * @param signedLongs true if longs has to be ordered as plain java longs. False to handle them as
@@ -81,6 +92,7 @@ public class Roaring64NavigableMap implements Externalizable, LongBitmapDataProv
   }
 
   /**
+   * 有参构造（是否有符号位、是否缓存基数）
    * By default, use RoaringBitmap as underlyings {@link BitmapDataProvider}
    * 
    * @param signedLongs true if longs has to be ordered as plain java longs. False to handle them as
@@ -93,6 +105,7 @@ public class Roaring64NavigableMap implements Externalizable, LongBitmapDataProv
   }
 
   /**
+   * 有参构造（提供 bitmap 产生器）
    * By default, longs are managed as unsigned longs and cardinalities are cached.
    * 
    * @param supplier provide the logic to instantiate new {@link BitmapDataProvider}, typically
@@ -103,6 +116,7 @@ public class Roaring64NavigableMap implements Externalizable, LongBitmapDataProv
   }
 
   /**
+   * 有参构造（有无符号位、提供 bitmap 产生器）
    * By default, we activating cardinalities caching.
    * 
    * @param signedLongs true if longs has to be ordered as plain java longs. False to handle them as
@@ -115,7 +129,9 @@ public class Roaring64NavigableMap implements Externalizable, LongBitmapDataProv
   }
 
   /**
-   * 
+   * 有参构造（有无符号位、是否缓存基数、提供 bitmap 产生器）
+   * 符号型创建 TreeMap 、无符号型创建无符号比较器的 TreeMap
+   *
    * @param signedLongs true if longs has to be ordered as plain java longs. False to handle them as
    *        unsigned 64bits long (as RoaringBitmap with unsigned integers)
    * @param cacheCardinalities true if cardinalities have to be cached. It will prevent many
@@ -138,6 +154,7 @@ public class Roaring64NavigableMap implements Externalizable, LongBitmapDataProv
     resetPerfHelpers();
   }
 
+  // 初始化结构
   private void resetPerfHelpers() {
     firstHighNotValid = RoaringIntPacking.highestHigh(signedLongs) + 1;
     allValid = false;
@@ -148,18 +165,21 @@ public class Roaring64NavigableMap implements Externalizable, LongBitmapDataProv
     latestAddedHigh = null;
   }
 
+  // 取出 NavigableMap 对象
   // Package-friendly: for the sake of unit-testing
   // @VisibleForTesting
   NavigableMap<Integer, BitmapDataProvider> getHighToBitmap() {
     return highToBitmap;
   }
 
+  // 取出高位
   // Package-friendly: for the sake of unit-testing
   // @VisibleForTesting
   int getLowestInvalidHigh() {
     return firstHighNotValid;
   }
 
+  // 取出排序后的全部基数
   // Package-friendly: for the sake of unit-testing
   // @VisibleForTesting
   long[] getSortedCumulatedCardinality() {
@@ -167,6 +187,7 @@ public class Roaring64NavigableMap implements Externalizable, LongBitmapDataProv
   }
 
   /**
+   * 将 Long 类型的值添加到容器中，不管其是否已经出现过
    * Add the value to the container (set the value to "true"), whether it already appears or not.
    *
    * Java lacks native unsigned longs but the x argument is considered to be unsigned. Within
@@ -177,16 +198,20 @@ public class Roaring64NavigableMap implements Externalizable, LongBitmapDataProv
    */
   @Override
   public void addLong(long x) {
+    // 获取高、低 16 位 int 值
     int high = high(x);
     int low = low(x);
 
+    // 复制引用建立新的 Map
     // Copy the reference to prevent race-condition
     Map.Entry<Integer, BitmapDataProvider> local = latestAddedHigh;
 
+    // 声明 BitmapDataProvider
     BitmapDataProvider bitmap;
     if (local != null && local.getKey().intValue() == high) {
       bitmap = local.getValue();
     } else {
+      // 获取高位对应值，如果为空则放入高位和对应值，否则更新最新 Map 值
       bitmap = highToBitmap.get(high);
       if (bitmap == null) {
         bitmap = newRoaringBitmap();
@@ -194,12 +219,15 @@ public class Roaring64NavigableMap implements Externalizable, LongBitmapDataProv
       }
       latestAddedHigh = new AbstractMap.SimpleImmutableEntry<>(high, bitmap);
     }
+    // bitmap 放入值
     bitmap.add(low);
 
     invalidateAboveHigh(high);
   }
 
   /**
+   * 添加 integer 类型值到容器中，不论其是否已经出现过
+   *
    * Add the integer value to the container (set the value to "true"), whether it already appears or
    * not.
    *
@@ -213,12 +241,14 @@ public class Roaring64NavigableMap implements Externalizable, LongBitmapDataProv
     addLong(Util.toUnsignedLong(x));
   }
 
+  // 返回一个 BitmapDataProvider
   private BitmapDataProvider newRoaringBitmap() {
     return supplier.newEmpty();
   }
 
+  // 重新设置失效的高位
   private void invalidateAboveHigh(int high) {
-    // The cardinalities after this bucket may not be valid anymore
+      // The cardinalities after this bucket may not be valid anymore
     if (compare(firstHighNotValid, high) > 0) {
       // High was valid up to now
       firstHighNotValid = high;
@@ -239,6 +269,7 @@ public class Roaring64NavigableMap implements Externalizable, LongBitmapDataProv
     allValid = false;
   }
 
+  // 有无符号的 int 类型大小比较
   private int compare(int x, int y) {
     if (signedLongs) {
       return Integer.compare(x, y);
@@ -247,6 +278,7 @@ public class Roaring64NavigableMap implements Externalizable, LongBitmapDataProv
     }
   }
 
+  // 通过高位添加低位的 bitmap
   private void pushBitmapForHigh(int high, BitmapDataProvider bitmap) {
     // TODO .size is too slow
     // int nbHighBefore = highToBitmap.headMap(high).size();
@@ -255,15 +287,19 @@ public class Roaring64NavigableMap implements Externalizable, LongBitmapDataProv
     assert previous == null : "Should push only not-existing high";
   }
 
+  // 返回一个 long 类型的低 32 位 int 值
   private int low(long id) {
     return RoaringIntPacking.low(id);
   }
 
+  // 返回一个 long 类型的高 32 位 int 值
   private int high(long id) {
     return RoaringIntPacking.high(id);
   }
 
   /**
+   * 返回添加到位图的不同整数的 long 数量
+   *
    * Returns the number of distinct integers added to the bitmap (e.g., number of bits set).
    *
    * @return the cardinality
@@ -293,6 +329,7 @@ public class Roaring64NavigableMap implements Externalizable, LongBitmapDataProv
   }
 
   /**
+   * 返回添加到位图的不同整数的 int 数量
    * 
    * @return the cardinality as an int
    * 
@@ -311,6 +348,8 @@ public class Roaring64NavigableMap implements Externalizable, LongBitmapDataProv
   }
 
   /**
+   * 返回 bitmap 排序后的第 j 个值
+   *
    * Return the jth value stored in this bitmap.
    *
    * @param j index of the value
@@ -373,6 +412,7 @@ public class Roaring64NavigableMap implements Externalizable, LongBitmapDataProv
     }
   }
 
+  // 非缓存查找
   // For benchmarks: compute without using cardinalities cache
   // https://github.com/RoaringBitmap/CRoaring/blob/master/cpp/roaring64map.hh
   private long selectNoCache(long j) {
@@ -393,6 +433,7 @@ public class Roaring64NavigableMap implements Externalizable, LongBitmapDataProv
     return throwSelectInvalidIndex(j);
   }
 
+  // 抛出选择有效索引异常
   private long throwSelectInvalidIndex(long j) {
     // see org.roaringbitmap.buffer.ImmutableRoaringBitmap.select(int)
     throw new IllegalArgumentException(
@@ -400,6 +441,8 @@ public class Roaring64NavigableMap implements Externalizable, LongBitmapDataProv
   }
 
   /**
+   * 返回 Long 类型的迭代器（该方法效率比 forEach 差）
+   *
    * For better performance, consider the Use the {@link #forEach forEach} method.
    *
    * @return a custom iterator over set bits, the bits are traversed in ascending sorted order
@@ -427,6 +470,7 @@ public class Roaring64NavigableMap implements Externalizable, LongBitmapDataProv
     };
   }
 
+  // 对每一个数值进行操作
   @Override
   public void forEach(final LongConsumer lc) {
     for (final Entry<Integer, BitmapDataProvider> highEntry : highToBitmap.entrySet()) {
@@ -440,6 +484,7 @@ public class Roaring64NavigableMap implements Externalizable, LongBitmapDataProv
     }
   }
 
+  // 对数值进行排序
   @Override
   public long rankLong(long id) {
     int high = RoaringIntPacking.high(id);
@@ -481,6 +526,7 @@ public class Roaring64NavigableMap implements Externalizable, LongBitmapDataProv
     }
   }
 
+  // 非缓存对数值进行排序
   // https://github.com/RoaringBitmap/CRoaring/blob/master/cpp/roaring64map.hh
   private long rankLongNoCache(int high, int low) {
     long result = 0L;
@@ -510,7 +556,8 @@ public class Roaring64NavigableMap implements Externalizable, LongBitmapDataProv
   }
 
   /**
-   * 
+   * 寻找最大的有效位置索引
+   *
    * @param high for which high bucket should we compute the cardinality
    * @return the highest validatedIndex
    */
@@ -580,6 +627,7 @@ public class Roaring64NavigableMap implements Externalizable, LongBitmapDataProv
     }
   }
 
+  // 根据有无符号类型进行二分查找
   private int binarySearch(int[] array, int key) {
     if (signedLongs) {
       return Arrays.binarySearch(array, key);
@@ -589,6 +637,7 @@ public class Roaring64NavigableMap implements Externalizable, LongBitmapDataProv
     }
   }
 
+  // 根据有无符号类型的限制范围的二分查找
   private int binarySearch(int[] array, int from, int to, int key) {
     if (signedLongs) {
       return Arrays.binarySearch(array, from, to, key);
@@ -597,6 +646,7 @@ public class Roaring64NavigableMap implements Externalizable, LongBitmapDataProv
     }
   }
 
+  // 无符号类型自定义 Comparator 的二分查找
   // From Arrays.binarySearch (Comparator). Check with org.roaringbitmap.Util.unsignedBinarySearch
   private static int unsignedBinarySearch(int[] a, int fromIndex, int toIndex, int key,
       Comparator<? super Integer> c) {
@@ -618,6 +668,7 @@ public class Roaring64NavigableMap implements Externalizable, LongBitmapDataProv
     return -(low + 1); // key not found.
   }
 
+  // ???
   private void ensureOne(Map.Entry<Integer, BitmapDataProvider> e, int currentHigh, int indexOk) {
     // sortedHighs are valid only up to some index
     assert indexOk <= sortedHighs.length : indexOk + " is bigger than " + sortedHighs.length;
@@ -687,12 +738,14 @@ public class Roaring64NavigableMap implements Externalizable, LongBitmapDataProv
   }
 
 
-
+  // 返回 int 类型的高位最大值
   private int highestHigh() {
     return RoaringIntPacking.highestHigh(signedLongs);
   }
 
   /**
+   * 按位进行 OR 操作（并集）。当前位图会被修改
+   *
    * In-place bitwise OR (union) operation. The current bitmap is modified.
    *
    * @param x2 other bitmap
@@ -749,6 +802,8 @@ public class Roaring64NavigableMap implements Externalizable, LongBitmapDataProv
   }
 
   /**
+   * 按位进行 XOR 操作（对称差集）。当前位图被修改
+   *
    * In-place bitwise XOR (symmetric difference) operation. The current bitmap is modified.
    *
    * @param x2 other bitmap
@@ -804,6 +859,8 @@ public class Roaring64NavigableMap implements Externalizable, LongBitmapDataProv
   }
 
   /**
+   * 按位进行 AND 操作（交集）。当前位图被修改
+   *
    * In-place bitwise AND (intersection) operation. The current bitmap is modified.
    *
    * @param x2 other bitmap
@@ -849,6 +906,8 @@ public class Roaring64NavigableMap implements Externalizable, LongBitmapDataProv
 
 
   /**
+   * 对当前位图进行 ANDNOT 操作（差集）。当前位图被修改
+   *
    * In-place bitwise ANDNOT (difference) operation. The current bitmap is modified.
    *
    * @param x2 other bitmap
@@ -890,6 +949,8 @@ public class Roaring64NavigableMap implements Externalizable, LongBitmapDataProv
   }
 
   /**
+   * 序列化和反序列化 Roaring64NavigableMap 。但其与 Java 序列化耦合紧密
+   *
    * {@link Roaring64NavigableMap} are serializable. However, contrary to RoaringBitmap, the
    * serialization format is not well-defined: for now, it is strongly coupled with Java standard
    * serialization. Just like the serialization may be incompatible between various Java versions,
@@ -907,6 +968,8 @@ public class Roaring64NavigableMap implements Externalizable, LongBitmapDataProv
   }
 
   /**
+   * 一个 String 来描述 bitmap
+   *
    * A string describing the bitmap.
    *
    * @return the string
@@ -943,6 +1006,7 @@ public class Roaring64NavigableMap implements Externalizable, LongBitmapDataProv
 
 
   /**
+   * 获取 Long 类型的迭代器（考虑应用 forEach 方法）
    *
    * For better performance, consider the Use the {@link #forEach forEach} method.
    *
@@ -955,6 +1019,7 @@ public class Roaring64NavigableMap implements Externalizable, LongBitmapDataProv
     return toIterator(it, false);
   }
 
+  // 将 Map 的迭代器变换成自定义的迭代器
   protected LongIterator toIterator(final Iterator<Map.Entry<Integer, BitmapDataProvider>> it,
       final boolean reversed) {
     return new LongIterator() {
@@ -1021,6 +1086,7 @@ public class Roaring64NavigableMap implements Externalizable, LongBitmapDataProv
     };
   }
 
+  // 检查是否包含值
   @Override
   public boolean contains(long x) {
     int high = RoaringIntPacking.high(x);
@@ -1034,11 +1100,13 @@ public class Roaring64NavigableMap implements Externalizable, LongBitmapDataProv
   }
 
 
+  // 获取对象的 int 字节大小
   @Override
   public int getSizeInBytes() {
     return (int) getLongSizeInBytes();
   }
 
+  // 获取对象的 long 字节大小
   @Override
   public long getLongSizeInBytes() {
     long size = 8;
@@ -1060,17 +1128,21 @@ public class Roaring64NavigableMap implements Externalizable, LongBitmapDataProv
     return size;
   }
 
+  // 对象是否为空
   @Override
   public boolean isEmpty() {
     return getLongCardinality() == 0L;
   }
 
+  // ???
   @Override
   public ImmutableLongBitmapDataProvider limit(long x) {
     throw new UnsupportedOperationException("TODO");
   }
 
   /**
+   * 使用估计更节省空间的运行长度编码
+   *
    * Use a run-length encoding where it is estimated as more space efficient
    * 
    * @return whether a change was applied
@@ -1089,6 +1161,8 @@ public class Roaring64NavigableMap implements Externalizable, LongBitmapDataProv
 
 
   /**
+   * 序列化 bitmap
+   *
    * Serialize this bitmap.
    *
    * Unlike RoaringBitmap, there is no specification for now: it may change from onve java version
@@ -1116,6 +1190,8 @@ public class Roaring64NavigableMap implements Externalizable, LongBitmapDataProv
 
 
   /**
+   * 反序列化 bitmap
+   *
    * Deserialize (retrieve) this bitmap.
    * 
    * Unlike RoaringBitmap, there is no specification for now: it may change from one java version to
@@ -1151,7 +1227,7 @@ public class Roaring64NavigableMap implements Externalizable, LongBitmapDataProv
     resetPerfHelpers();
   }
 
-
+  // 序列化后字节大小
   @Override
   public long serializedSizeInBytes() {
     long nbBytes = 0L;
@@ -1174,6 +1250,8 @@ public class Roaring64NavigableMap implements Externalizable, LongBitmapDataProv
   }
 
   /**
+   * 重新设置为空 bitmap
+   *
    * reset to an empty bitmap; result occupies as much space a newly created bitmap.
    */
   public void clear() {
@@ -1182,6 +1260,8 @@ public class Roaring64NavigableMap implements Externalizable, LongBitmapDataProv
   }
 
   /**
+   * 返回一个设定值得数组
+   *
    * Return the set values as an array, if the cardinality is smaller than 2147483648. The long
    * values are in sorted order.
    *
@@ -1206,6 +1286,8 @@ public class Roaring64NavigableMap implements Externalizable, LongBitmapDataProv
   }
 
   /**
+   * 多个 long 类型值生成 bitmap
+   *
    * Generate a bitmap with the specified values set to true. The provided longs values don't have
    * to be in sorted order, but it may be preferable to sort them from a performance point of view.
    *
@@ -1219,6 +1301,8 @@ public class Roaring64NavigableMap implements Externalizable, LongBitmapDataProv
   }
 
   /**
+   * 添加多个 long 类型的值
+   *
    * Set all the specified values to true. This can be expected to be slightly faster than calling
    * "add" repeatedly. The provided integers values don't have to be in sorted order, but it may be
    * preferable to sort them from a performance point of view.
@@ -1232,6 +1316,8 @@ public class Roaring64NavigableMap implements Externalizable, LongBitmapDataProv
   }
 
   /**
+   * 添加 [rangeStart, rangeEnd) 中的所有值到 bitmap 中
+   *
    * Add to the current bitmap all longs in [rangeStart,rangeEnd).
    *
    * @param rangeStart inclusive beginning of range
@@ -1287,11 +1373,13 @@ public class Roaring64NavigableMap implements Externalizable, LongBitmapDataProv
     invalidateAboveHigh(startHigh);
   }
 
+  // 获取反序排列的迭代器
   @Override
   public LongIterator getReverseLongIterator() {
     return toIterator(highToBitmap.descendingMap().entrySet().iterator(), true);
   }
 
+  // 移除 long 类型值
   @Override
   public void removeLong(long x) {
     int high = high(x);
@@ -1308,6 +1396,7 @@ public class Roaring64NavigableMap implements Externalizable, LongBitmapDataProv
 
   }
 
+  // 恢复申请但无用的内存
   @Override
   public void trim() {
     for (BitmapDataProvider bitmap : highToBitmap.values()) {
@@ -1338,6 +1427,8 @@ public class Roaring64NavigableMap implements Externalizable, LongBitmapDataProv
 
 
   /**
+   * 如果之前不存在则添加值，否则移除它
+   *
    * Add the value if it is not already present, otherwise remove it.
    *
    * @param x long value

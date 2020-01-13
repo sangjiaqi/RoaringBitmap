@@ -1,7 +1,7 @@
 /*
  * (c) the authors Licensed under the Apache License, Version 2.0.
  */
-package org.roaringbitmap.longlong;
+package org.roaringbitmap.shortlong;
 
 /**
  * An LongConsumer receives the long values contained in a data structure. Each value is visited
