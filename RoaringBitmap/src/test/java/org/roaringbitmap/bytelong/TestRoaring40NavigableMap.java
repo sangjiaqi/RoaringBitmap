@@ -27,10 +27,10 @@ public class TestRoaring40NavigableMap {
         for (int i = 0; i < n; i++) right.addLong(((long)(rand.nextInt() & 0xFF)) << 32);
 
         bm1 = new Roaring40NavigableMap();
-        bm1.addInt(1); bm1.addInt(3); bm1.add(5);
+        bm1.addInt(1); bm1.addInt(3); bm1.addInt(5); bm1.addLong(12884901888L);
 
         bm2 = new Roaring40NavigableMap();
-        bm2.addInt(1); bm2.addInt(2); bm2.add(5);
+        bm2.addInt(1); bm2.addInt(2); bm2.addInt(5); bm2.addLong(77309411328L);
 
     }
 
@@ -38,8 +38,18 @@ public class TestRoaring40NavigableMap {
     public void test1() {
         System.out.println(left.toString());
         System.out.println(right.toString());
-        bm1.and(bm2);
+
+        left.and(right);
+        left.or(right);
+        left.andNot(right);
+        left.xor(right);
+
+        System.out.println(left);
+        System.out.println(right);
+
+        System.out.println(bm1);
         System.out.println(bm2);
+
     }
 
 }

@@ -27,7 +27,7 @@ import java.util.TreeMap;
 
 public class Roaring40NavigableMap implements Externalizable, LongBitmapDataProvider {
 
-    // 定义 ShortInteger 类型的储存结构
+    // 定义 ByteInteger 类型的储存结构
     private NavigableMap<Byte, BitmapDataProvider> highToBitmap;
 
     // 是否为符号 Long 类型
@@ -39,7 +39,7 @@ public class Roaring40NavigableMap implements Externalizable, LongBitmapDataProv
     // 默认情况下，缓存基数
     private transient boolean doCacheCardinalities = true;
 
-    // 取出高位（当连续请求排名时，防止重新计算所有的基数）
+    // 取出高失效位（当连续请求排名时，防止重新计算所有的基数）
     private transient byte firstHighNotValid = (byte) (highestHigh() + 1);
 
     // 标识积累的基数是否全部有效
@@ -111,10 +111,10 @@ public class Roaring40NavigableMap implements Externalizable, LongBitmapDataProv
     NavigableMap<Byte, BitmapDataProvider> getHighToBitmap() { return highToBitmap; }
 
     /**
-     * 取出高位
-     * @return 高 16 位
+     * 取出高无效位
+     * @return
      */
-    short getLowestInvalidHigh() { return firstHighNotValid; }
+    byte getLowestInvalidHigh() { return firstHighNotValid; }
 
     /**
      * 取出排序后全部基数
@@ -445,6 +445,10 @@ public class Roaring40NavigableMap implements Externalizable, LongBitmapDataProv
      * @param rangeEnd
      */
     public void add(final long rangeStart, final long rangeEnd) {
+        if (rangeStart > (1L << 40) || rangeEnd > (1L << 40)) {
+            throw new IllegalArgumentException("The param is large than 40 bit");
+        }
+
         byte startHigh = high(rangeStart);
         int startLow = low(rangeStart);
 
@@ -458,7 +462,6 @@ public class Roaring40NavigableMap implements Externalizable, LongBitmapDataProv
             } else {
                 currentStartLow = 0;
             }
-
             long startLowAsLong = Util.toUnsignedLong(currentStartLow);
 
             final long endLowAsLong;
@@ -493,6 +496,8 @@ public class Roaring40NavigableMap implements Externalizable, LongBitmapDataProv
      * @param x
      */
     public void flip (final long x) {
+        if (x > (1L << 40)) throw new IllegalArgumentException("The param is large than 40 bit");
+
         byte high = RoaringIntPacking.high(x);
         BitmapDataProvider lowBitmap = highToBitmap.get(high);
         if (lowBitmap == null) {
@@ -525,10 +530,7 @@ public class Roaring40NavigableMap implements Externalizable, LongBitmapDataProv
 
     @Override
     public void addLong(long x) {
-
-        long num = 1L;
-
-        if (x > (num << 40)) throw new IllegalArgumentException("The param is large than 40 bit");
+        if (x > (1L << 40)) throw new IllegalArgumentException("The param is large than 40 bit");
 
         byte high = high(x);
         int low = low(x);
@@ -553,6 +555,8 @@ public class Roaring40NavigableMap implements Externalizable, LongBitmapDataProv
 
     @Override
     public void removeLong(long x) {
+        if (x > (1L << 40)) throw new IllegalArgumentException("The param is large than 40 bit");
+
         byte high = high(x);
 
         BitmapDataProvider bitmap = highToBitmap.get(high);
@@ -574,6 +578,8 @@ public class Roaring40NavigableMap implements Externalizable, LongBitmapDataProv
 
     @Override
     public boolean contains(long x) {
+        if (x > (1L << 40)) throw new IllegalArgumentException("The param is large than 40 bit");
+
         byte high = RoaringIntPacking.high(x);
         BitmapDataProvider lowBitmap = highToBitmap.get(high);
         if (lowBitmap == null) {

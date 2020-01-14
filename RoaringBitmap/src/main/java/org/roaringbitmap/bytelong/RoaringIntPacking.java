@@ -7,7 +7,7 @@ import java.math.BigInteger;
 import java.util.Comparator;
 
 /**
- * 这个类的作用是，切分 Long 数据类型成为 Short 和 Integer 类型，一个座位 key 另一个加入一个 bitmap
+ * 这个类的作用是，切分 Long 数据类型成为 Byte 和 Integer 类型，一个座位 key 另一个加入一个 bitmap
  * Used to hold the logic packing 2 integers in a long, and separating a long in two integers. It is
  * useful in {@link Roaring40NavigableMap} as the implementation split the input long in two
  * integers, one used as key of a NavigableMap while the other is added in a Bitmap
@@ -18,9 +18,9 @@ import java.util.Comparator;
 class RoaringIntPacking {
 
   /**
-   * 返回一个 long 类型的 32 - 48 位 short 值
+   * 返回一个 long 类型的 32 - 40 位 short 值
    * @param id any long, positive or negative
-   * @return an int holding the 32 highest order bits of information of the input long
+   * @return an int holding the 8 highest order bits of information of the input long
    */
   public static byte high(long id) {
     return (byte) ((id >> 32) & 0xff);
@@ -36,7 +36,7 @@ class RoaringIntPacking {
   }
 
   /**
-   * 将 int 类型的高 16 位和 int 类型的低 32 位拼成 long 类型值
+   * 将 byte 类型的高 18 位和 int 类型的低 32 位拼成 long 类型值
    * @param high an integer representing the highest order bits of the output long
    * @param low an integer representing the lowest order bits of the output long
    * @return a long packing together the integers as computed by
@@ -49,7 +49,7 @@ class RoaringIntPacking {
 
 
   /**
-   * 获得一个 short 类型的高位的最大值
+   * 获得一个 byte 类型的高位的最大值
    * @param signedLongs true if long put in a {@link Roaring40NavigableMap} should be considered as
    *        signed long.
    * @return the int representing the highest value which can be set as high value in a

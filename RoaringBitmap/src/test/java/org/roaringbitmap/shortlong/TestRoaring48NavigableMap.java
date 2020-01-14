@@ -6,7 +6,7 @@ import org.omg.PortableInterceptor.SYSTEM_EXCEPTION;
 
 import java.util.Random;
 
-public class TestRoaring40NavigableMap {
+public class TestRoaring48NavigableMap {
 
     Roaring48NavigableMap left;
     Roaring48NavigableMap right;
@@ -30,7 +30,7 @@ public class TestRoaring40NavigableMap {
         bm1.addInt(1); bm1.addInt(3); bm1.add(5);
 
         bm2 = new Roaring48NavigableMap();
-        bm2.addInt(1); bm2.addInt(2); bm2.add(5); bm2.addLong(1L << 50);
+        bm2.addInt(1); bm2.addInt(2); bm2.add(5); bm1.add(1L << 42);
 
     }
 
@@ -38,8 +38,18 @@ public class TestRoaring40NavigableMap {
     public void test1() {
         System.out.println(left.toString());
         System.out.println(right.toString());
-        bm1.and(bm2);
-        System.out.println(bm2);
+
+        left.and(right);
+        left.or(right);
+        left.andNot(right);
+        left.xor(right);
+
+        System.out.println(left);
+        System.out.println(right);
+
+        System.out.println(bm1);
+
+
     }
 
 }
